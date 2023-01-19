@@ -32,76 +32,118 @@ class Repo:
         self.repo = GitRepo(self.local_path)
         self.github = github.get_repo(self.remote_path)
 
-        self.paths, self.embeds = self.get_repo_embeddings()
+        self.paths= self.get_paths()
+        self.embeds = self.get_embeds()
         self.issue_pr_map = self.get_issue_pr_map()
 
         self.index = faiss.IndexFlatIP(self.embeds.shape[1])
         self.index.add(self.embeds)
 
-    def save_embeds(self, embeds, paths):
+    def save_embeds(self, embeds):
         save_path_embed = f'embeddings/{self.name}_embeds.npy'
-        save_path_paths = f'embeddings/{self.name}_paths.json'
-
         with open(save_path_embed, 'wb') as f:
             np.save(f, np.array(embeds))
 
+    def load_embeds(self):
+        save_path = f'embeddings/{self.name}_embeds.npy'
+        if not os.path.exists(save_path):
+            return None
+        with open(save_path, 'rb') as f:
+            data = np.load(f)
+        return data
+
+    def save_paths(self, paths):
+        save_path_paths = f'embeddings/{self.name}_paths.json'
         with open(save_path_paths, 'w') as f:
             json.dump(paths, f)
 
-    def load_embeds(self):
-        save_path_embed = f'embeddings/{self.name}_embeds.npy'
-        save_path_paths = f'embeddings/{self.name}_paths.json'
+    def load_paths(self):
+        save_path = f'embeddings/{self.name}_paths.json'
+        if not os.path.exists(save_path):
+            return None
+        with open(save_path, 'rb') as f:
+            data = json.load(f)
+        return data
 
-        with open(save_path_embed, 'rb') as f:
-            embeds = np.load(f)
-
-        with open(save_path_paths, 'r') as f:
-            paths = json.load(f)
-
-        return paths, embeds
-
-    def get_repo_embeddings(self, batch_size=50, save=True, max_num_files=2000):
-        save_path = f'embeddings/{self.name}_embeds.npy'
-        if os.path.exists(save_path):
-            return self.load_embeds()
-
-        embeddings = np.empty((0, EMBED_DIMS), np.float32)
-        paths = []
+    def walk(self, max_num_files=2000):
         num_files = 0
-        batch = []
-
         for root, dirs, files in os.walk(self.local_path, topdown=False):
             files = [f for f in files if not f[0] == '.' and f.endswith(Repo.extensions)]
             dirs[:] = [d for d in dirs if not d[0] == '.' and d.startswith(Repo.directory_blacklist)]
             for name in files:
                 filename = os.path.join(root, name)
+
                 try:
                     with open(filename, 'r') as f:
                         code = f.read()
                 except UnicodeDecodeError:
                     continue
 
-                if code.strip() == '':
-                    continue
+                if code.strip() == '': continue
 
-                batch.append((filename, code))
+                if num_files >= max_num_files:
+                    return
+
+                yield filename, code
+
                 num_files += 1
 
-                if (len(batch) == batch_size or num_files > max_num_files):
-                    embeddings = embed([code for _, code in batch])
-                    for (filename, code), embedding in zip(batch, embeddings):
-                        paths.append(filename)
-                        embeddings = np.append(embeddings, [embedding], axis=0)
-                    batch = []
+    def get_embeds(self, batch_size=50, save=True):
+        embeds = self.load_embeds()
+        if embeds is not None:
+            return embeds
 
-                    if num_files > max_num_files:
-                        break
+        batch = []
+        embeds = np.empty((0, EMBED_DIMS), np.float32)
+        generator = self.walk()
+        for filename, code in generator:
+            batch.append(code)
 
-        # Save as npy file
-        if save:
-            self.save_embeds(embeddings, paths)
+            if len(batch) == batch_size:
+                embeds_batch = embed(batch)
+                embeds = np.append(embeds, embeds_batch, axis=0)
+                batch = []
 
-        return paths, embeddings
+        if len(batch) > 0:
+            embeds_batch = embed(batch)
+            embeds = np.append(embeds, embeds_batch, axis=0)
+            batch = []
+
+        if save: self.save_embeds(embeds)
+        return embeds
+
+    def get_paths(self, save=True):
+        paths = self.load_paths()
+        if paths is not None:
+            return paths
+
+        paths = []
+        generator = self.walk()
+
+        for filename, code in generator:
+            paths.append(filename)
+
+        if save: self.save_paths(paths)
+        return paths
+
+    def get_file_descriptions(self, save=True):
+        generator = self.walk()
+        description_prompt = 'A short summary of the above file is:'
+        descriptions = []
+        for filename in generator:
+            try:
+                with open(filename, 'r') as f:
+                    code = f.read()
+            except UnicodeDecodeError:
+                continue
+
+            prompt = f'```{filename}\n{code}```\n{description_prompt}'
+            description = complete(prompt)
+
+            descriptions.append(description)
+
+        if save: self.save_descriptions(descriptions)
+        return descriptions
 
     def get_similarity(self, text):
         repo_embeddings = self.embeds

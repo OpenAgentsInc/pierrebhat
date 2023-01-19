@@ -18,7 +18,7 @@ def embed(text):
             if len(text[i]) > MAX_CONTENT_LENGTH:
                 text[i] = text[i][0:MAX_CONTENT_LENGTH]
         embeddings = openai.Embedding.create(input=text, model=MODEL_EMBED)["data"]
-        return [np.array(embedding['embedding'], dtype=np.float32) for embedding in embeddings]
+        return np.array([np.array(embedding['embedding'], dtype=np.float32) for embedding in embeddings])
     else:
         text = text.replace("\n", " ")
         if len(text) > MAX_CONTENT_LENGTH:
@@ -32,10 +32,9 @@ def compare_text(text1, text2):
     return compare_embeddings(embed(text1), embed(text2))
 
 def complete(prompts):
-    if isinstance(prompts) == list
     results = openai.Completion.create(
         engine=MODEL_COMPLETION,
-        prompt=prompt,
+        prompt=prompts,
         max_tokens=100,
         temperature=0.2,
         top_p=1,
