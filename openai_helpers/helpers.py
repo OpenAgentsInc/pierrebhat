@@ -2,11 +2,13 @@ from openai.embeddings_utils import get_embedding, cosine_similarity
 import openai
 import numpy as np
 import os
+import time
 
 MAX_CONTENT_LENGTH = 8191
+MAX_CONTENT_LENGTH_COMPLETE = 4097
 EMBED_DIMS = 1536
 MODEL_EMBED = 'text-embedding-ada-002'
-MODEL_COMPLETION = 'code-davinci-002'
+MODEL_COMPLETION = 'text-davinci-003'
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -31,15 +33,28 @@ def compare_embeddings(embed1, embed2):
 def compare_text(text1, text2):
     return compare_embeddings(embed(text1), embed(text2))
 
-def complete(prompts):
-    results = openai.Completion.create(
-        engine=MODEL_COMPLETION,
-        prompt=prompts,
-        max_tokens=100,
-        temperature=0.2,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0.6,
-        stop=[])
+def complete(prompt, tokens_response=150):
+    if len(prompt) > MAX_CONTENT_LENGTH_COMPLETE - tokens_response:
+        nonsequitor = '\n...truncated\n'
+        margin = int(len(nonsequitor) / 2)
+        first_half = int((MAX_CONTENT_LENGTH_COMPLETE - tokens_response)/ 2)
+        prompt = prompt[:first_half - margin] + nonsequitor + prompt[-first_half + margin:]
 
-    return results['choices'][0]['text']
+    # Try 3 times to get a response
+    for i in range(0,3):
+        try:
+            results = openai.Completion.create(
+                engine=MODEL_COMPLETION,
+                prompt=prompt,
+                max_tokens=tokens_response,
+                temperature=0.2,
+                top_p=1,
+                frequency_penalty=0.5,
+                presence_penalty=0.6)
+            break
+        except:
+            print(f"Tried {i} times. Couldn't get response, trying again...")
+            time.sleep(0.6)
+            continue
+
+    return results['choices'][0]['text'].strip()

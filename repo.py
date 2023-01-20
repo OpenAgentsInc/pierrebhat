@@ -9,6 +9,7 @@ import os
 import numpy as np
 import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, EMBED_DIMS
+from filesystem import Filesystem, Folder, File
 
 # TODO:
 # - Separate scraper from business logic
@@ -29,11 +30,20 @@ class Repo:
         self.remote_path = f'{org}/{name}'
         self.local_path = f'{repo_dir}/{name}'
 
+        # CHANGE THIS FOR DIFFERENT REPO. DYNAMICALLY SAVE.
+        self.num_files = 345
+
+        self.filesystem = Filesystem()
+        self.filesystem.create_folder(self.local_path, description = 'Twitter Bootstrap')
+
+        self.create_filesystem()
+
         self.repo = GitRepo(self.local_path)
         self.github = github.get_repo(self.remote_path)
 
         self.paths= self.get_paths()
         self.embeds = self.get_embeds()
+        self.descriptions = self.get_descriptions()
         self.issue_pr_map = self.get_issue_pr_map()
 
         self.index = faiss.IndexFlatIP(self.embeds.shape[1])
@@ -53,8 +63,8 @@ class Repo:
         return data
 
     def save_paths(self, paths):
-        save_path_paths = f'embeddings/{self.name}_paths.json'
-        with open(save_path_paths, 'w') as f:
+        save_path = f'embeddings/{self.name}_paths.json'
+        with open(save_path, 'w') as f:
             json.dump(paths, f)
 
     def load_paths(self):
@@ -65,11 +75,24 @@ class Repo:
             data = json.load(f)
         return data
 
-    def walk(self, max_num_files=2000):
+    def load_descriptions(self):
+        save_path = f'embeddings/{self.name}_descriptions.json'
+        if not os.path.exists(save_path):
+            return None
+        with open(save_path, 'rb') as f:
+            data = json.load(f)
+        return data
+
+    def save_descriptions(self, descriptions):
+        save_path = f'embeddings/{self.name}_descriptions.json'
+        with open(save_path, 'w') as f:
+            json.dump(descriptions, f)
+
+    def walk(self, max_num_files=1000):
         num_files = 0
-        for root, dirs, files in os.walk(self.local_path, topdown=False):
+        for root, dirs, files in os.walk(self.local_path, topdown=True):
             files = [f for f in files if not f[0] == '.' and f.endswith(Repo.extensions)]
-            dirs[:] = [d for d in dirs if not d[0] == '.' and d.startswith(Repo.directory_blacklist)]
+            dirs[:] = [d for d in dirs if d[0] != '.' and not d.startswith(Repo.directory_blacklist)]
             for name in files:
                 filename = os.path.join(root, name)
 
@@ -84,9 +107,21 @@ class Repo:
                 if num_files >= max_num_files:
                     return
 
-                yield filename, code
+                yield filename, root, dirs, code
 
                 num_files += 1
+                self.num_files = num_files
+
+    def create_filesystem(self):
+        for root, dirs, files in os.walk(self.local_path, topdown=True):
+            files = [f for f in files if f[0] != '.' and f.endswith(Repo.extensions)]
+            dirs[:] = [d for d in dirs if d[0] != '.' and not d.startswith(Repo.directory_blacklist)]
+
+            folder = self.filesystem.find_folder(root)
+            for dir in dirs:
+                folder.add_folder(Folder(dir))
+            for file in files:
+                folder.add_file(File(file))
 
     def get_embeds(self, batch_size=50, save=True):
         embeds = self.load_embeds()
@@ -96,7 +131,7 @@ class Repo:
         batch = []
         embeds = np.empty((0, EMBED_DIMS), np.float32)
         generator = self.walk()
-        for filename, code in generator:
+        for filename, root, dirs, code in generator:
             batch.append(code)
 
             if len(batch) == batch_size:
@@ -120,29 +155,39 @@ class Repo:
         paths = []
         generator = self.walk()
 
-        for filename, code in generator:
+        for filename, root, dirs, code in generator:
             paths.append(filename)
 
         if save: self.save_paths(paths)
         return paths
 
-    def get_file_descriptions(self, save=True):
+    def get_descriptions(self, save=True, save_every=10):
+        descriptions = self.load_descriptions()
+        if descriptions is not None and len(descriptions) == self.num_files:
+            return descriptions
+
+        if descriptions is None:
+            descriptions = {}
+
         generator = self.walk()
-        description_prompt = 'A short summary of the above file is:'
-        descriptions = []
-        for filename in generator:
-            try:
-                with open(filename, 'r') as f:
-                    code = f.read()
-            except UnicodeDecodeError:
-                continue
+        description_prompt = 'A short summary in plain English of the above code is:'
+        num_files = len(descriptions)
+        for filename, root, dirs, code in generator:
+            # Skip files that already have descriptions
+            if filename in descriptions: continue
+            extension = filename.split('.')[-1]
+            prompt = f'File: {filename}\n\nCode:\n\n```{extension}\n{code}```\n\n{description_prompt}\nThis file'
+            description = 'This file ' + complete(prompt)
+            descriptions[filename] = description
 
-            prompt = f'```{filename}\n{code}```\n{description_prompt}'
-            description = complete(prompt)
+            if save and (num_files % save_every == 0):
+                print(f'Saving descriptions for {num_files} files')
+                self.save_descriptions(descriptions)
 
-            descriptions.append(description)
+            num_files += 1
 
         if save: self.save_descriptions(descriptions)
+
         return descriptions
 
     def get_similarity(self, text):
