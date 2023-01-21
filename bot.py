@@ -9,9 +9,24 @@ class PRBot:
     def apply_patches(self, repo_path, patches):
         pass
 
-    def create_pr(self, repo, title, body, head):
-        repo.create_pull(title=title, body=body, base="master", head=head)
+    def create_pr(self, repo, submittedPR):
+        # repo.create_pull(title=title, body=body, base="master", head=head)
+        pass
 
+class SubmittedPR:
+    def __init__(self, issue, changes):
+        # changes is a dict of {filename: contents}
+        self.changes = changes
+        self.issue = issue
+
+        self.title = self.create_title(changes, issue)
+        self.body = self.create_body(changes, issue)
+
+    def create_title(self, changes, issue):
+        pass
+
+    def create_body(self, changes, issue):
+        pass
 
 if __name__ == "__main__":
     # Example of forking a repo, creating a file and making a PR
