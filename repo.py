@@ -256,12 +256,14 @@ class Repo:
                 prompt += f.read()
             prompt += '```\n'
 
-            prompt += 'Does this file need to be changed to resolve the issue? If not, respond with the single word "No". If yes, respond only with the git patch to by applied:'
+            prompt += 'Does this file need to be changed to resolve the issue? Respond with only `Yes` or `No`.'
 
-            patch = complete(prompt)
-            if patch == 'No':
+            needs_patch = complete(prompt)
+            if needs_patch == 'No':
                 continue
             else:
+                prompt += 'Please provide a git patch for the file.\n```'
+                patch = complete(prompt)
                 patches[file] = patch
 
         return patches
