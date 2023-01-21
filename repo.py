@@ -11,7 +11,7 @@ import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+token = "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"
 github = Github(token)
 session = HTMLSession()
 
@@ -31,7 +31,7 @@ class Repo:
         self.num_files = 345
 
         self.filesystem = Filesystem()
-        self.filesystem.create_folder(self.local_path, description = 'Twitter Bootstrap')
+        self.filesystem.create_folder(self.local_path, description = 'Twitter nanoGPT')
 
         self.create_filesystem()
 
@@ -322,8 +322,8 @@ class Issue:
         return conversation
 
 if __name__ == '__main__':
-    repo_org = 'twbs'
-    repo_name = 'bootstrap'
+    repo_org = 'karpathy'
+    repo_name = 'nanoGPT'
     num_hits = 5
     repo = Repo(repo_org, repo_name)
 

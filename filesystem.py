@@ -113,7 +113,7 @@ class File:
 if __name__ == '__main__':
     import os
 
-    for root, dirs, files in os.walk('repos/bootstrap', topdown=True):
+    for root, dirs, files in os.walk('repos/nanoGPT', topdown=True):
         print(root, dirs, files)
         for name in files:
             filename = os.path.join(root, name)

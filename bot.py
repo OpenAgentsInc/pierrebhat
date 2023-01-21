@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # Upstream repo to fork
     upstream_org = 'dmvaldman'
-    upstream_name = 'bootstrap'
+    upstream_name = 'nanoGPT'
     upstream_repo = g.get_repo(f'{upstream_org}/{upstream_name}')
 
     # Fork repo if doesn't exist
