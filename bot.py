@@ -1,10 +1,11 @@
 from github import Github
+from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code
 
 # TODO: should create a branch before making a PR?
 
 class PRBot:
     def __init__(self):
-        self.token = "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"
+        self.token = "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"
 
     def apply_patches(self, repo_path, patches):
         pass
@@ -15,7 +16,7 @@ class PRBot:
 
 class SubmittedPR:
     def __init__(self, issue, changes):
-        # changes is a dict of {filename: contents}
+        # changes is a dict of {filename: (prev_content, new_content)}
         self.changes = changes
         self.issue = issue
 
@@ -23,10 +24,17 @@ class SubmittedPR:
         self.body = self.create_body(changes, issue)
 
     def create_title(self, changes, issue):
-        pass
+        changed_files = [f for f in changes.keys()]
+        prompt = f'What is a 1-liner description for the github PR that fixes this issue? The issue title is {issue.title} and the body is {issue.body}. The fix modified these files: {changed_files}.\nTitle:'
+        title = complete(prompt)
+        return title
 
     def create_body(self, changes, issue):
-        pass
+        # TODO: diff the changes and use that to create a better description
+        prompt = f'What is a description of the github PR that fixes this issue? The issue title is {issue.title} and the issue body is {issue.body}. The fix modified these files: {changed_files}.\nDescription:'
+        prompt += 'Respond in markdown format and break down the fix into steps.'
+        description = complete(prompt)
+        return "Fixes {issue.url}.\n\n{description}"
 
 if __name__ == "__main__":
     # Example of forking a repo, creating a file and making a PR
@@ -46,7 +54,7 @@ if __name__ == "__main__":
     repo = user.get_repo(upstream_name)
 
     # Create file
-    filename = 'echo6.py'
+    filename = 'echo1.py'
     commit_msg = 'commit msg'
     content = 'print("hello world")'
     repo.create_file(filename, commit_msg, content, branch="main")
