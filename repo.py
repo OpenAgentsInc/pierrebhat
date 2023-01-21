@@ -11,7 +11,7 @@ import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+token = "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"
 github = Github(token)
 session = HTMLSession()
 
@@ -322,8 +322,8 @@ class Issue:
         return conversation
 
 if __name__ == '__main__':
-    repo_org = 'twbs'
-    repo_name = 'bootstrap'
+    repo_org = 'karpathy'
+    repo_name = 'nanoGPT'
     num_hits = 5
     repo = Repo(repo_org, repo_name)
 
