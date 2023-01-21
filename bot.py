@@ -26,8 +26,6 @@ class SubmittedPR:
         description = complete(prompt)
         return "Fixes {issue.url}.\n\n{description}"
 
-    def create_body(self, changes, issue):
-        return 'body'
 
 class PRBot:
     def __init__(self):
@@ -36,7 +34,6 @@ class PRBot:
         self.user = self.github.get_user()
 
     def create_pr(self, org, name, pr: SubmittedPR):
-
         # Upstream repo to fork
         upstream_repo = self.github.get_repo(f'{org}/{name}')
 
