@@ -1,18 +1,8 @@
 from github import Github
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code
+from github import Repository
 
 # TODO: should create a branch before making a PR?
-
-class PRBot:
-    def __init__(self):
-        self.token = "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"
-
-    def apply_patches(self, repo_path, patches):
-        pass
-
-    def create_pr(self, repo, submittedPR):
-        # repo.create_pull(title=title, body=body, base="master", head=head)
-        pass
 
 class SubmittedPR:
     def __init__(self, issue, changes):
@@ -36,28 +26,51 @@ class SubmittedPR:
         description = complete(prompt)
         return "Fixes {issue.url}.\n\n{description}"
 
+    def create_body(self, changes, issue):
+        return 'body'
+
+class PRBot:
+    def __init__(self):
+        self.token = "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"
+        self.github = Github(self.token)
+        self.user = self.github.get_user()
+
+    def create_pr(self, org, name, pr: SubmittedPR):
+
+        # Upstream repo to fork
+        upstream_repo = self.github.get_repo(f'{org}/{name}')
+
+        # Fork repo if doesn't exist
+        self.fork_repo(upstream_repo)
+        repo = self.user.get_repo(name)
+
+        # Apply PR changes to files
+        self.apply_changes(repo, pr.changes)
+        upstream_repo.create_pull(pr.title, pr.body, upstream_repo.default_branch, f"pierrebhat:main", True)
+
+    def fork_repo(self, repo):
+        if repo.name not in [r.name for r in self.user.get_repos()]:
+            self.user.create_fork(repo)
+
+    def apply_changes(self, repo: Repository.Repository, changes):
+        for file_path, content in changes.items():
+            file = repo.get_contents(file_path)
+            repo.update_file(file_path, f'Updated {file.name}', content, file.sha)
+
+
 if __name__ == "__main__":
     # Example of forking a repo, creating a file and making a PR
     pb = PRBot()
-    g = Github(pb.token)
-    user = g.get_user()
 
-    # Upstream repo to fork
-    upstream_org = 'dmvaldman'
-    upstream_name = 'bootstrap'
-    upstream_repo = g.get_repo(f'{upstream_org}/{upstream_name}')
+    org = 'twbs'
+    name = 'bootstrap'
+    changes = {
+        'js/src/button.js' : '<Button/>',
+        'js/src/tab.js' : '<Tab/>'
+    }
 
-    # Fork repo if doesn't exist
-    if upstream_name not in [r.name for r in user.get_repos()]:
-        user.create_fork(upstream_repo)
+    issue = {
+    }
 
-    repo = user.get_repo(upstream_name)
-
-    # Create file
-    filename = 'echo1.py'
-    commit_msg = 'commit msg'
-    content = 'print("hello world")'
-    repo.create_file(filename, commit_msg, content, branch="main")
-
-    # Create PR
-    upstream_repo.create_pull('title', 'body', upstream_repo.default_branch, f"pierrebhat:main", True)
+    pr = SubmittedPR(issue, changes)
+    pb.create_pr(org, name, pr)
