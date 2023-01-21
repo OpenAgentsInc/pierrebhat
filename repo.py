@@ -8,11 +8,8 @@ import re
 import os
 import numpy as np
 import json
-from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, EMBED_DIMS
+from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
-
-# TODO:
-# - Separate scraper from business logic
 
 token = "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"
 github = Github(token)
@@ -226,8 +223,14 @@ class Repo:
         nearest_files = [self.paths[i] for i in I[0]]
         return nearest_files
 
-    def calc_similarity_score(self, issue, pr):
-        num_hits = min(5, 3 * pr.num_changed_files)
+    def filter_files_from_descriptions(self, files, issue):
+        pass
+        # prompt = 'Choose three of the files below that are most relevant to solving this code issue.\n'
+        # prompt += f'Issue: {issue.title}\n'
+        # for index, file in enumerate(files):
+        #     prompt += f'{index}. {file} - {self.descriptions[file]}\n'
+
+    def calc_similarity_score(self, issue, pr, num_hits=5):
         nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
 
         count_hits = 0
@@ -241,27 +244,27 @@ class Repo:
 
         return count_hits, count_misses
 
-    def check_fix_issue(issue, pr):
-        parent_commit = pr.parent_commit
-        changed_files = pr.changed_files
-        conversation = issue.body
+    def get_issue_patches(self, issue, num_hits=5):
+        nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
 
-        # checkout the parent commit in the local repo
-        self.repo.git.checkout(parent_commit)
-        # open the changed files
-        prompt = f'Below is an issue on {repo_name}.\n Issue:{conversation}\n\n and here are the files affected:\n'
+        patches = {}
+        for file in nearest_files:
+            prompt = f'Below is an issue on for the {self.remote_path} codebase.\n Issue:{issue.title} - {issue.body}\n\n Here is a potential file that may need to be updated to fix the issue:\n'
 
-        for file in changed_files:
-            file_abs = os.path.join(f'{self.local_path}', file)
             prompt += 'Changed file: ' + file + '```'
-            with open(file_abs, 'r') as f:
+            with open(file, 'r') as f:
                 prompt += f.read()
             prompt += '```\n'
 
-        prompt += 'Please provide the patch to the above files to fix the issue.'
+            prompt += 'Does this file need to be changed to resolve the issue? If not, respond with the single word "No". If yes, respond only with the git patch to by applied:'
 
-        patch = complete(prompt)
-        return patch
+            patch = complete(prompt)
+            if patch == 'No':
+                continue
+            else:
+                patches[file] = patch
+
+        return patches
 
 class PR:
     def __init__(self, pr_num, repo):
@@ -277,8 +280,6 @@ class PR:
             print(f"changed files for {self.url} don't match")
 
     def get_changed_files(self):
-        # r = requests.get(f"https://github.com/{repo.full_name}/pull/{pr_num}/files")
-        # soup = BeautifulSoup(r.text, 'html.parser')
         resp = session.get(f"{self.url}/files")
         resp.html.render()
         soup = BeautifulSoup(resp.html.html, 'html.parser')
@@ -297,19 +298,21 @@ class Issue:
         self.num = issue_num
         self.issue = repo.github.get_issue(issue_num)
         self.url = self.issue.html_url
+        self.title = self.issue.title
+        self.body = self.issue.body
 
-        self.body = self.parse()
-        self.embed = embed(self.body)
+        self.conversation = self.parse()
+        self.full_text = f'Issue: {self.title}\n{self.body}\nResponses:{self.conversation}'
+
+        self.embed = embed(self.full_text)
 
     def get_comments(self):
         return [comment.body for comment in self.issue.get_comments()]
 
     def parse(self):
+        # Get conversation from the issue
         issue = self.issue
-        title = issue.title
-        body = issue.body
-
-        conversation = 'Issue: ' + title + '\n' + body + 'Responses:\n'
+        conversation = ''
         for comment in issue.get_comments():
             name = comment.user.login
             body = comment.body
@@ -319,6 +322,7 @@ class Issue:
 if __name__ == '__main__':
     repo_org = 'twbs'
     repo_name = 'bootstrap'
+    num_hits = 5
     repo = Repo(repo_org, repo_name)
 
     for issue_num, pr_num in repo.issue_pr_map.items():
@@ -327,9 +331,8 @@ if __name__ == '__main__':
         issue = Issue(issue_num, repo)
         pr = PR(pr_num, repo)
 
-        count_hits, count_misses = repo.calc_similarity_score(issue, pr)
-
-        if count_hits + count_misses > 0:
+        count_hits, count_misses = repo.calc_similarity_score(issue, pr, num_hits=num_hits)
+        if count_hits > 0:
             print(f"pr: {pr.url}")
             print(f"issue: {issue.url}")
             print(f"hit rate: {count_hits / (count_hits + count_misses)}")
@@ -337,7 +340,9 @@ if __name__ == '__main__':
         else:
             print(f"no hits or misses for {issue_num}")
 
-        if count_hits > 0:
-            diff_url = pr.pr.diff_url
-            diff = requests.get(diff_url).text
-            # patch = repo.check_fix_issue(issue, pr)
+        patches = repo.get_issue_patches(issue, num_hits=num_hits)
+        for file, patch in patches.items():
+            print(f'File: {file}')
+            print(f'Patch: {patch}')
+
+        # Pass patches to bot to apply

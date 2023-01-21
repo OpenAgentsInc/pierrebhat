@@ -6,9 +6,11 @@ import time
 
 MAX_CONTENT_LENGTH = 8191
 MAX_CONTENT_LENGTH_COMPLETE = 4097
+MAX_CONTENT_LENGTH_COMPLETE_CODE = 8191
 EMBED_DIMS = 1536
 MODEL_EMBED = 'text-embedding-ada-002'
 MODEL_COMPLETION = 'text-davinci-003'
+MODEL_COMPLETION_CODE = 'code-davinci-002'
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -48,6 +50,32 @@ def complete(prompt, tokens_response=150):
                 prompt=prompt,
                 max_tokens=tokens_response,
                 temperature=0.2,
+                top_p=1,
+                frequency_penalty=0.5,
+                presence_penalty=0.6)
+            break
+        except:
+            print(f"Tried {i} times. Couldn't get response, trying again...")
+            time.sleep(0.6)
+            continue
+
+    return results['choices'][0]['text'].strip()
+
+def complete_code(prompt, tokens_response=150):
+    if len(prompt) > MAX_CONTENT_LENGTH_COMPLETE_CODE - tokens_response:
+        nonsequitor = '\n...truncated\n'
+        margin = int(len(nonsequitor) / 2)
+        first_half = int((MAX_CONTENT_LENGTH_COMPLETE_CODE - tokens_response)/ 2)
+        prompt = prompt[:first_half - margin] + nonsequitor + prompt[-first_half + margin:]
+
+    # Try 3 times to get a response
+    for i in range(0,3):
+        try:
+            results = openai.Completion.create(
+                engine=MODEL_COMPLETION_CODE,
+                prompt=prompt,
+                max_tokens=tokens_response,
+                temperature=0.1,
                 top_p=1,
                 frequency_penalty=0.5,
                 presence_penalty=0.6)
