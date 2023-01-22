@@ -16,7 +16,6 @@ MODEL_COMPLETION = 'text-davinci-003'
 MODEL_COMPLETION_CODE = 'code-davinci-002'
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-print(openai.api_key)
 
 # Helpers
 def embed(text):
@@ -53,7 +52,7 @@ def complete(prompt, tokens_response=1024):
                 engine=MODEL_COMPLETION,
                 prompt=prompt,
                 max_tokens=tokens_response,
-                temperature=0.2,
+                temperature=0.7,
                 top_p=1,
                 frequency_penalty=0.5,
                 presence_penalty=0.6)

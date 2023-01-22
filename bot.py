@@ -3,6 +3,8 @@ from openai_helpers.helpers import compare_embeddings, compare_text, embed, comp
 from multiprocessing import Pool
 from functools import reduce
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,8 +20,6 @@ class SubmittedPR:
         self.issue = issue
         self.title = self.create_title(changes, issue)
         self.body = self.create_body(changes, issue)
-        print(f'TITLE: {self.title}')
-        print(f'BODY: {self.body}')
 
     def create_title(self, changes, issue):
         changed_files = [f for f in changes.keys()]
@@ -34,7 +34,6 @@ class SubmittedPR:
         prompt += 'Respond in markdown format and break down the fix into steps.'
         description = complete(prompt)
         return f'Fixes {issue["url"]}.\n\n{description}'
-
 
 class PRBot:
 
@@ -86,8 +85,6 @@ if __name__ == "__main__":
 
     issues_all = repo.get_issue_list()
     issue = [issue for issue in issues_all if issue.num == 50][0]
-
     changes = repo.get_issue_patches(issue, num_hits=num_hits)
-
-    pr = SubmittedPR(issue, changes)
+    # pr = SubmittedPR(issue, changes)
     # bot.create_pr(org, name, pr)
