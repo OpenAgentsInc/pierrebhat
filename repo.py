@@ -12,7 +12,7 @@ import openai
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+token = os.getenv('GITHUB_TOKEN')
 github = Github(token)
 session = HTMLSession()
 
@@ -218,6 +218,10 @@ class Repo:
 
         return issue_pr_map
 
+    def get_issue_list(self):
+        issues = self.github.get_issues()
+        return [Issue(issue.number, self) for issue in issues]
+
     def get_nearest_files(self, issue, num_hits=5):
         issue_embedding = issue.embed
         D, I = self.index.search(np.array([issue_embedding]), num_hits)
@@ -337,7 +341,6 @@ class PR:
     def get_parent_commit(self):
         return self.pr.get_commits()[0].parents[0].sha
 
-
 class Issue:
     def __init__(self, issue_num, repo):
         self.num = issue_num
@@ -365,11 +368,21 @@ class Issue:
         return conversation
 
 if __name__ == '__main__':
+    # repo_org = 'twbs'
+    # repo_name = 'bootstrap'
     repo_org = 'karpathy'
     repo_name = 'nanoGPT'
     num_hits = 5
     repo = Repo(repo_org, repo_name)
 
+    # In production, get open issues
+    issues = repo.get_issue_list()
+    for issue in issues:
+        if issue.num == 50 or issue.num == 8:
+            patches = repo.get_issue_patches(issue, num_hits=num_hits)
+
+
+    # For testing, get closed issues with matching PRs
     for issue_num, pr_num in repo.issue_pr_map.items():
         issue_num = int(issue_num)
 
