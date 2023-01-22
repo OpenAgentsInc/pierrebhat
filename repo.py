@@ -12,6 +12,9 @@ import openai
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
+from dotenv import load_dotenv
+load_dotenv()
+
 token = os.getenv('GITHUB_TOKEN')
 github = Github(token)
 session = HTMLSession()
@@ -249,7 +252,7 @@ class Repo:
 
         return count_hits, count_misses
 
-    def get_issue_patches(self, issue, pr, num_hits=5):
+    def get_issue_patches(self, issue, num_hits=5):
         def clean_code_block(code_block):
             code_block = code_block.strip()
             if code_block.startswith("```"):
@@ -260,15 +263,6 @@ class Repo:
             return code_block
 
         nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
-        # nearest_files = pr.changed_files
-        repo_dir = "repos/bootstrap_/"
-        nearest_files = [
-            "site/assets/scss/_clipboard-js.scss",
-            "site/assets/scss/_component-examples.scss",
-            "site/assets/scss/_syntax.scss",
-            "site/assets/scss/_variables.scss",         
-        ]
-        nearest_files = [f"{repo_dir}/{x}" for x in nearest_files]
 
         patches = []
         for file in nearest_files:
