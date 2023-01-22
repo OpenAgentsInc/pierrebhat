@@ -49,17 +49,21 @@ class PRBot:
         self.repo = self.user.get_repo(name)
 
     def create_pr(self, pr: SubmittedPR):
-        self.apply_changes(self.repo, pr.changes)
-        self.upstream_repo.create_pull(pr.title, pr.body, self.upstream_repo.default_branch, f"pierrebhat:main", True)
+        self.apply_changes(pr.changes)
+        self.upstream_repo.create_pull(pr.title, pr.body, base=self.upstream_repo.default_branch, head="pierrebhat:master")
 
     def fork_repo(self, repo):
         if repo.name not in [r.name for r in self.user.get_repos()]:
             self.user.create_fork(repo)
 
     def apply_changes(self, changes):
-        for file_path, content in changes.items():
+        print(repo.org)
+        print(repo.name)
+        for change in changes:
+            file_path = str(change["file_name"]).replace('repos/nanoGPT/', '')
+            new = change["new_content"]
             file = self.repo.get_contents(file_path)
-            self.repo.update_file(file_path, f'Updated {file.name}', content, file.sha)
+            self.repo.update_file(file_path, f'Updated {file.path}', new, file.sha)
 
     def get_all_content(self):
         contents = self.repo.get_contents("")
@@ -78,13 +82,14 @@ if __name__ == "__main__":
     # PR Bot
     repo_org = 'karpathy'
     repo_name = 'nanoGPT'
+    issue_num = 50
     num_hits = 5
 
     bot = PRBot(repo_org, repo_name)
     repo = Repo(repo_org, repo_name)
 
     issues_all = repo.get_issue_list()
-    issue = [issue for issue in issues_all if issue.num == 50][0]
+    issue = [issue for issue in issues_all if issue.num == issue_num][0]
     changes = repo.get_issue_patches(issue, num_hits=num_hits)
     pr = SubmittedPR(issue, changes)
-    # bot.create_pr(org, name, pr)
+    bot.create_pr(pr)
