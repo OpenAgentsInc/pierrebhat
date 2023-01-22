@@ -1,6 +1,7 @@
-from github import Github
+from github import Github, ContentFile
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code
-from github import Repository
+from multiprocessing import Pool
+from functools import reduce
 
 # TODO: should create a branch before making a PR?
 
@@ -28,46 +29,58 @@ class SubmittedPR:
 
 
 class PRBot:
-    def __init__(self):
-        self.token = "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"
+
+    extensions = ('.js', '.jsx', '.py', '.md', '.json', '.html', '.css', '.yml', '.yaml', '.ts', '.tsx', '.ipynb', '.c', '.cc', '.cpp', '.go', '.h', '.hpp', '.java', '.sol', '.sh', '.txt')
+    directory_blacklist = ('build', 'dist', '.github')
+
+    def __init__(self, org, name):
+        self.token = "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"
         self.github = Github(self.token)
         self.user = self.github.get_user()
+        self.upstream_repo = self.github.get_repo(f'{org}/{name}')
+        self.fork_repo(self.upstream_repo)
+        self.repo = self.user.get_repo(name)
 
-    def create_pr(self, org, name, pr: SubmittedPR):
-        # Upstream repo to fork
-        upstream_repo = self.github.get_repo(f'{org}/{name}')
-
-        # Fork repo if doesn't exist
-        self.fork_repo(upstream_repo)
-        repo = self.user.get_repo(name)
-
-        # Apply PR changes to files
-        self.apply_changes(repo, pr.changes)
-        upstream_repo.create_pull(pr.title, pr.body, upstream_repo.default_branch, f"pierrebhat:main", True)
+    def create_pr(self, pr: SubmittedPR):
+        self.apply_changes(self.repo, pr.changes)
+        self.upstream_repo.create_pull(pr.title, pr.body, self.upstream_repo.default_branch, f"pierrebhat:main", True)
 
     def fork_repo(self, repo):
         if repo.name not in [r.name for r in self.user.get_repos()]:
             self.user.create_fork(repo)
 
-    def apply_changes(self, repo: Repository.Repository, changes):
+    def apply_changes(self, changes):
         for file_path, content in changes.items():
-            file = repo.get_contents(file_path)
-            repo.update_file(file_path, f'Updated {file.name}', content, file.sha)
+            file = self.repo.get_contents(file_path)
+            self.repo.update_file(file_path, f'Updated {file.name}', content, file.sha)
 
+    def get_all_content(self):
+        contents = self.repo.get_contents("")
+        output = {}
+        for item in contents:
+            if item.type == 'dir' and not str(item.path).startswith(self.directory_blacklist):
+                contents.extend(self.repo.get_contents(item.path))
+            else:
+                if not str(item.name).endswith(self.extensions):
+                    continue
+                decoded = item.decoded_content.decode('utf-8')
+                output[item.path] = decoded
+        return output
+    
+    def create_changes(content, issue):
+        return {}
 
 if __name__ == "__main__":
-    # Example of forking a repo, creating a file and making a PR
-    pb = PRBot()
+    # PR Bot
+    bot = PRBot('karpathy', 'nanoGPT')
+    # Dict of all file paths to file content
+    content = bot.get_all_content()
 
-    org = 'twbs'
-    name = 'bootstrap'
-    changes = {
-        'js/src/button.js' : '<Button/>',
-        'js/src/tab.js' : '<Tab/>'
-    }
+    # Selected Github issue
+    issue = {}
 
-    issue = {
-    }
+    # Create all file changes
+    changes = bot.create_changes(content, issue)
 
     pr = SubmittedPR(issue, changes)
-    pb.create_pr(org, name, pr)
+    # bot.create_pr(org, name, pr)
