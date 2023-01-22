@@ -3,6 +3,8 @@ from openai_helpers.helpers import compare_embeddings, compare_text, embed, comp
 from multiprocessing import Pool
 from functools import reduce
 
+from repo import Repo, Issue, PR
+
 # TODO: should create a branch before making a PR?
 
 class SubmittedPR:
@@ -66,21 +68,26 @@ class PRBot:
                 decoded = item.decoded_content.decode('utf-8')
                 output[item.path] = decoded
         return output
-    
+
     def create_changes(content, issue):
         return {}
 
 if __name__ == "__main__":
     # PR Bot
-    bot = PRBot('karpathy', 'nanoGPT')
-    # Dict of all file paths to file content
-    content = bot.get_all_content()
+    repo_org = 'karpathy'
+    repo_name = 'nanoGPT'
+    num_hits = 5
 
-    # Selected Github issue
-    issue = {}
+    bot = PRBot(repo_org, repo_name)
+    repo = Repo(repo_org, repo_name)
+
+    issues_all = repo.get_issue_list()
+    issue = [issue for issue in issues_all if issue.num == 50][0]
+
+    changes = repo.get_issue_patches(issue, num_hits=num_hits)
 
     # Create all file changes
-    changes = bot.create_changes(content, issue)
+    changes = bot.create_changes(changes)
 
     pr = SubmittedPR(issue, changes)
     # bot.create_pr(org, name, pr)
