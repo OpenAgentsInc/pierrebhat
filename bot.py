@@ -4,6 +4,9 @@ from multiprocessing import Pool
 from functools import reduce
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from repo import Repo, Issue, PR
 
 # TODO: should create a branch before making a PR?
