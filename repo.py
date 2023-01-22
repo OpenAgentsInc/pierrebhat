@@ -11,7 +11,7 @@ import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+token = os.getenv('GITHUB_TOKEN')
 github = Github(token)
 session = HTMLSession()
 

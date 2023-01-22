@@ -2,6 +2,7 @@ from github import Github, ContentFile
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code
 from multiprocessing import Pool
 from functools import reduce
+import os
 
 from repo import Repo, Issue, PR
 
@@ -38,7 +39,7 @@ class PRBot:
     directory_blacklist = ('build', 'dist', '.github')
 
     def __init__(self, org, name):
-        self.token = "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"
+        self.token = os.getenv('PIERRE_BOT_TOKEN')
         self.github = Github(self.token)
         self.user = self.github.get_user()
         self.upstream_repo = self.github.get_repo(f'{org}/{name}')
