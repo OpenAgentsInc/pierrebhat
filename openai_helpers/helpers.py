@@ -35,7 +35,7 @@ def compare_embeddings(embed1, embed2):
 def compare_text(text1, text2):
     return compare_embeddings(embed(text1), embed(text2))
 
-def complete(prompt, tokens_response=150):
+def complete(prompt, tokens_response=1024):
     if len(prompt) > MAX_CONTENT_LENGTH_COMPLETE - tokens_response:
         nonsequitor = '\n...truncated\n'
         margin = int(len(nonsequitor) / 2)

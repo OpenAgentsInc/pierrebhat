@@ -8,6 +8,7 @@ import re
 import os
 import numpy as np
 import json
+import openai
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
@@ -244,28 +245,70 @@ class Repo:
 
         return count_hits, count_misses
 
-    def get_issue_patches(self, issue, num_hits=5):
-        nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
+    def get_issue_patches(self, issue, pr, num_hits=5):
+        def clean_code_block(code_block):
+            code_block = code_block.strip()
+            if code_block.startswith("```"):
+                code_block = code_block[3:]
+            if code_block.endswith("```"):
+                code_block = code_block[:-3]
+            code_block = code_block.strip()
+            return code_block
 
-        patches = {}
+        nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
+        # nearest_files = pr.changed_files
+        repo_dir = "repos/bootstrap_/"
+        nearest_files = [
+            "site/assets/scss/_clipboard-js.scss",
+            "site/assets/scss/_component-examples.scss",
+            "site/assets/scss/_syntax.scss",
+            "site/assets/scss/_variables.scss",         
+        ]
+        nearest_files = [f"{repo_dir}/{x}" for x in nearest_files]
+
+        patches = []
         for file in nearest_files:
+            print(file)
             prompt = f'Below is an issue on for the {self.remote_path} codebase.\n Issue:{issue.title} - {issue.body}\n\n Here is a potential file that may need to be updated to fix the issue:\n'
 
             prompt += 'Changed file: ' + file + '```'
             with open(file, 'r') as f:
-                prompt += f.read()
+                file_content = f.read()
+                prompt += file_content
             prompt += '```\n'
 
-            prompt += 'Does this file need to be changed to resolve the issue? Respond with only `Yes` or `No`.'
+            action_prompt1 = 'Does this file need to be changed to resolve the issue? Respond with only `Yes` or `No`.'
+            needs_patch = complete(prompt + action_prompt1)
 
-            needs_patch = complete(prompt)
             if needs_patch == 'No':
                 continue
             else:
-                prompt += 'Please provide a git patch for the file.\n```'
-                patch = complete(prompt)
-                patches[file] = patch
-
+                # prompt += 'Please provide a git patch for the file.\n```'
+                # patch = complete(prompt)
+                # patches[file] = patch
+                # action_prompt2 = 'Do the following: 1. output the code block that needs to be changed and 2. output the change.'
+                action_prompt2 = "Identify which code block needs to be changed (mark it up with \"Before:\") and output the change (mark it up with \"After:\"). Make your change match the coding style of the original file."
+                change = complete(prompt + action_prompt2)
+                if "Before:" not in change or "After:" not in change:
+                    print("Warning: incorrect output format")
+                    continue
+                before_and_after = change.split("Before:", 1)[1]
+                before, after = before_and_after.split("After:", 1)
+                before = clean_code_block(before)
+                after = clean_code_block(after)
+                if before in file_content:
+                    new_file_content = file_content.replace(before, after)
+                    # Create a patch 
+                    patch = {
+                        "file_name": file,
+                        "content": file_content,
+                        "new_content": new_file_content
+                    }
+                    patches.append(patch)
+                else:
+                    print("Warning: cannot locate `Before` block")
+    
+        print(f"Sending {len(patches)} files in the patch")
         return patches
 
 class PR:
@@ -342,9 +385,11 @@ if __name__ == '__main__':
         else:
             print(f"no hits or misses for {issue_num}")
 
-        patches = repo.get_issue_patches(issue, num_hits=num_hits)
+        patches = repo.get_issue_patches(issue, pr, num_hits=num_hits)
         for file, patch in patches.items():
             print(f'File: {file}')
             print(f'Patch: {patch}')
+        for patch in patches:
+            print(json.dumps(patch, indent=4))        
 
         # Pass patches to bot to apply
