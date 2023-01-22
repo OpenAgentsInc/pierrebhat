@@ -89,8 +89,5 @@ if __name__ == "__main__":
 
     changes = repo.get_issue_patches(issue, num_hits=num_hits)
 
-    # Create all file changes
-    changes = bot.create_changes(changes)
-
     pr = SubmittedPR(issue, changes)
     # bot.create_pr(org, name, pr)
