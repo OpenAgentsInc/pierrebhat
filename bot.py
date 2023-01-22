@@ -12,22 +12,24 @@ class SubmittedPR:
         # changes is a dict of {filename: (prev_content, new_content)}
         self.changes = changes
         self.issue = issue
-
         self.title = self.create_title(changes, issue)
         self.body = self.create_body(changes, issue)
+        print(f'TITLE: {self.title}')
+        print(f'BODY: {self.body}')
 
     def create_title(self, changes, issue):
         changed_files = [f for f in changes.keys()]
-        prompt = f'What is a 1-liner description for the github PR that fixes this issue? The issue title is {issue.title} and the body is {issue.body}. The fix modified these files: {changed_files}.\nTitle:'
+        prompt = f'What is a 1-liner description for the github PR that fixes this issue? The issue title is {issue["title"]} and the body is {issue["body"]}. The fix modified these files: {changed_files}.\nTitle:'
         title = complete(prompt)
         return title
 
     def create_body(self, changes, issue):
         # TODO: diff the changes and use that to create a better description
-        prompt = f'What is a description of the github PR that fixes this issue? The issue title is {issue.title} and the issue body is {issue.body}. The fix modified these files: {changed_files}.\nDescription:'
+        changed_files = [f for f in changes.keys()]
+        prompt = f'What is a description of the github PR that fixes this issue? The issue title is {issue["title"]} and the issue body is {issue["body"]}. The fix modified these files: {changed_files}.\nDescription:'
         prompt += 'Respond in markdown format and break down the fix into steps.'
         description = complete(prompt)
-        return "Fixes {issue.url}.\n\n{description}"
+        return f'Fixes {issue["url"]}.\n\n{description}'
 
 
 class PRBot:
@@ -36,7 +38,7 @@ class PRBot:
     directory_blacklist = ('build', 'dist', '.github')
 
     def __init__(self, org, name):
-        self.token = "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"
+        self.token = "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"
         self.github = Github(self.token)
         self.user = self.github.get_user()
         self.upstream_repo = self.github.get_repo(f'{org}/{name}')
@@ -68,9 +70,6 @@ class PRBot:
                 decoded = item.decoded_content.decode('utf-8')
                 output[item.path] = decoded
         return output
-
-    def create_changes(content, issue):
-        return {}
 
 if __name__ == "__main__":
     # PR Bot

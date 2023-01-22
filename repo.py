@@ -298,7 +298,6 @@ class PR:
     def get_parent_commit(self):
         return self.pr.get_commits()[0].parents[0].sha
 
-
 class Issue:
     def __init__(self, issue_num, repo):
         self.num = issue_num
