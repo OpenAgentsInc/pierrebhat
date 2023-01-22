@@ -11,14 +11,14 @@ import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+token = "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"
 github = Github(token)
 session = HTMLSession()
 
 
 class Repo:
-    extensions = ('.js', '.jsx', '.py', '.md', '.json', '.html', '.css', '.yml', '.yaml', '.ts', '.tsx', '.ipynb', '.c', '.cc', '.cpp', '.go', '.h', '.hpp', '.java', '.sol', '.sh', '.txt')
-    directory_blacklist = ('build', 'dist', '.github')
+    extensions = ('.js', '.jsx', '.py', '.json', '.html', '.css', '.scss', '.yml', '.yaml', '.ts', '.tsx', '.ipynb', '.c', '.cc', '.cpp', '.go', '.h', '.hpp', '.java', '.sol', '.sh', '.txt')
+    directory_blacklist = ('build', 'dist', '.github', 'site', 'tests')
     def __init__(self, org, name, repo_dir='repos'):
         self.org = org
         self.name = name
@@ -39,8 +39,8 @@ class Repo:
         self.github = github.get_repo(self.remote_path)
 
         self.paths= self.get_paths()
-        self.embeds = self.get_embeds()
         self.descriptions = self.get_descriptions()
+        self.embeds = self.get_embeds(self.descriptions)
         self.issue_pr_map = self.get_issue_pr_map()
 
         self.index = faiss.IndexFlatIP(self.embeds.shape[1])
@@ -120,7 +120,7 @@ class Repo:
             for file in files:
                 folder.add_file(File(file))
 
-    def get_embeds(self, batch_size=50, save=True):
+    def get_embeds(self, descriptions, batch_size=50, save=True):
         embeds = self.load_embeds()
         if embeds is not None:
             return embeds
@@ -129,7 +129,7 @@ class Repo:
         embeds = np.empty((0, EMBED_DIMS), np.float32)
         generator = self.walk()
         for filename, root, dirs, code in generator:
-            batch.append(code)
+            batch.append(f'File: {filename}\n\n{code}') # 1/2 HyDra
 
             if len(batch) == batch_size:
                 embeds_batch = embed(batch)
@@ -223,9 +223,23 @@ class Repo:
 
     def get_nearest_files(self, issue, num_hits=5):
         issue_embedding = issue.embed
+        extensions = issue.allowedExtensions
+        pairs = []
+        
+        for i, embedding in enumerate(self.embeds):
+            similarity = compare_embeddings(embedding, issue_embedding)
+            pairs.append((self.paths[i], similarity))
+            print('similarity', similarity, self.paths[i])
+            # extension = f'.{self.paths[i].split(".")[-1]}'
+            # # check if any of the blacklisted directories are in the path
+            # # if any([blacklisted_dir in self.paths[i] for blacklisted_dir in Repo.directory_blacklist]): continue
+            # if extension in extensions:
+                
+
+        pairs.sort(key=lambda x: x[1], reverse=True)
         D, I = self.index.search(np.array([issue_embedding]), num_hits)
         nearest_files = [self.paths[i] for i in I[0]]
-        return nearest_files
+        return nearest_files # [pair[0] for pair in pairs[0:num_hits]]
 
     def filter_files_from_descriptions(self, files, issue):
         pass
@@ -236,9 +250,14 @@ class Repo:
 
     def calc_similarity_score(self, issue, pr, num_hits=5):
         nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
-
+        print('*******')
+        print('Nearest files:', nearest_files)
+        print('issue', issue.title, '\n', issue.body)
+        print('*******\n\n\n')
         count_hits = 0
         count_misses = 0
+        relevant_filepaths = []
+        print('changed files', pr.changed_files)
         for file in pr.changed_files:
             file_abs = os.path.join(f'{self.local_path}', file)
             if file_abs in nearest_files:
@@ -310,7 +329,12 @@ class Issue:
         self.conversation = self.parse()
         self.full_text = f'Issue: {self.title}\n{self.body}\nResponses:{self.conversation}'
 
+        enhanced_text, extensions = self.enhanceIssue()
+        print('enhanced text', f'Key Focus: {enhanced_text}')
+
+        # self.embed = embed(f'Key Focus: {enhanced_text}')
         self.embed = embed(self.full_text)
+        self.allowedExtensions = extensions
 
     def get_comments(self):
         return [comment.body for comment in self.issue.get_comments()]
@@ -324,6 +348,73 @@ class Issue:
             body = comment.body
             conversation += 'From {name}\n: {body}\n'.format(name=name, body=body)
         return conversation
+    
+    def enhanceIssue(self):
+        prompt = f"""We're trying to figure out the most relevant files to a Github issue in a codebase
+
+Given the following queries, explain what is being looked for and include as many related keywords/synonyms as possible.
+
+Issue: 
+\"\"\"
+In Bootstrap 5.3 alpha 1 input-group component partialy react to inline data-bs-theme="dark" attribute 
+ ### Prerequisites
+
+- [X] I have [searched](https://github.com/twbs/bootstrap/issues?utf8=%E2%9C%93&q=is%3Aissue) for duplicate or closed issues
+- [X] I have [validated](https://html5.validator.nu/) any HTML to avoid common problems
+- [X] I have read the [contributing guidelines](https://github.com/twbs/bootstrap/blob/main/.github/CONTRIBUTING.md)
+
+### Describe the issue
+
+So I set for html tag data-bs-theme="light" attribute and set data-bs-theme="dark" attribute inline for form-group component.
+
+When I switch theme in html tag - color scheme of whole document are changing, but form-control background color also change from white to dark, is it must be fixed in dark color?. I repeat this bug at Bootstrap documentation page by inserting 
+form-group html code in some examples.
+
+### Reduced test cases
+
+```
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>  
+</head>
+<body>
+    <div class="input-group input-group-lg" data-bs-theme="dark">
+        <input type="text" class="form-control" placeholder="Email Address" aria-label="Email address" aria-describedby="button-join">
+        <button class="btn btn-success bg-gradient" type="button" id="button-join">Join</button>
+    </div>
+</body>
+</html>
+```
+
+### What operating system(s) are you seeing the problem on?
+
+Windows
+
+### What browser(s) are you seeing the problem on?
+
+Chrome
+
+### What version of Bootstrap are you using?
+
+v5.3.0-alpha1
+\"\"\"
+Key Focus: styling
+Accepted File Extensions: [".css", ".scss", ".html", ".jsx", ".tsx"]
+Core Concepts: styling, CSS, scss, readability, contrast
+Code Examples: .bg-gradient, .data-bs-theme, light, dark, background-color: #ffffff
+
+Issue:
+\"\"\"
+{self.full_text}
+\"\"\"
+Key Focus:
+        """
+        results = complete(prompt)
+        # extract extract the extensions from the results using this regex: \[.*\]
+        file_extensions = re.findall(r'\[.*\]', results)
+        if (len(file_extensions) > 0):
+            file_extensions = json.loads(file_extensions[0])
+        return results, file_extensions
 
 if __name__ == '__main__':
     # repo_org = 'twbs'
@@ -332,33 +423,15 @@ if __name__ == '__main__':
     repo_name = 'nanoGPT'
     num_hits = 5
     repo = Repo(repo_org, repo_name)
+    total_hits, total_misses = 0, 0
 
     # In production, get open issues
+    patches = {}
     issues = repo.get_issue_list()
     for issue in issues:
-        if issue.num == 50 or issue.num == 8:
+        if issue.num == 50:
             patches = repo.get_issue_patches(issue, num_hits=num_hits)
+            nearest_files = repo.get_nearest_files(issue, num_hits=num_hits)
+            print('NM', nearest_files)
 
-
-    # For testing, get closed issues with matching PRs
-    for issue_num, pr_num in repo.issue_pr_map.items():
-        issue_num = int(issue_num)
-
-        issue = Issue(issue_num, repo)
-        pr = PR(pr_num, repo)
-
-        count_hits, count_misses = repo.calc_similarity_score(issue, pr, num_hits=num_hits)
-        if count_hits > 0:
-            print(f"pr: {pr.url}")
-            print(f"issue: {issue.url}")
-            print(f"hit rate: {count_hits / (count_hits + count_misses)}")
-            print(f"hits/misses: {count_hits}/{count_misses}")
-        else:
-            print(f"no hits or misses for {issue_num}")
-
-        patches = repo.get_issue_patches(issue, num_hits=num_hits)
-        for file, patch in patches.items():
-            print(f'File: {file}')
-            print(f'Patch: {patch}')
-
-        # Pass patches to bot to apply
+   
