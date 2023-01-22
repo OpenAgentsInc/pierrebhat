@@ -11,7 +11,10 @@ import json
 from openai_helpers.helpers import compare_embeddings, compare_text, embed, complete, complete_code, EMBED_DIMS
 from filesystem import Filesystem, Folder, File
 
-token = "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"
+from dotenv import load_dotenv
+load_dotenv()
+
+token = os.getenv('GITHUB_TOKEN')
 github = Github(token)
 session = HTMLSession()
 
@@ -219,6 +222,7 @@ class Repo:
 
     def get_issue_list(self):
         issues = self.github.get_issues()
+        issues = [issue for issue in issues if issue.number == 50]
         return [Issue(issue.number, self) for issue in issues]
 
     def get_nearest_files(self, issue, num_hits=5):
@@ -229,7 +233,6 @@ class Repo:
         for i, embedding in enumerate(self.embeds):
             similarity = compare_embeddings(embedding, issue_embedding)
             pairs.append((self.paths[i], similarity))
-            print('similarity', similarity, self.paths[i])
             # extension = f'.{self.paths[i].split(".")[-1]}'
             # # check if any of the blacklisted directories are in the path
             # # if any([blacklisted_dir in self.paths[i] for blacklisted_dir in Repo.directory_blacklist]): continue
@@ -268,6 +271,15 @@ class Repo:
         return count_hits, count_misses
 
     def get_issue_patches(self, issue, num_hits=5):
+        def clean_code_block(code_block):
+            code_block = code_block.strip()
+            if code_block.startswith("```"):
+                code_block = code_block[3:]
+            if code_block.endswith("```"):
+                code_block = code_block[:-3]
+            code_block = code_block.strip()
+            return code_block
+
         nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
 
         patches = {}

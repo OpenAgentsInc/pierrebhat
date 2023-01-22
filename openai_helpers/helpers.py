@@ -4,6 +4,9 @@ import numpy as np
 import os
 import time
 
+from dotenv import load_dotenv
+load_dotenv()
+
 MAX_CONTENT_LENGTH = 8191
 MAX_CONTENT_LENGTH_COMPLETE = 4097
 MAX_CONTENT_LENGTH_COMPLETE_CODE = 8191
@@ -13,6 +16,7 @@ MODEL_COMPLETION = 'text-davinci-003'
 MODEL_COMPLETION_CODE = 'code-davinci-002'
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+print(openai.api_key)
 
 # Helpers
 def embed(text):
