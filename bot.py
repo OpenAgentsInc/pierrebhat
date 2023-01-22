@@ -22,18 +22,18 @@ class SubmittedPR:
         self.body = self.create_body(changes, issue)
 
     def create_title(self, changes, issue):
-        changed_files = [f for f in changes.keys()]
-        prompt = f'What is a 1-liner description for the github PR that fixes this issue? The issue title is {issue["title"]} and the body is {issue["body"]}. The fix modified these files: {changed_files}.\nTitle:'
+        changed_files = [x['file_name'] for x in changes]
+        prompt = f'What is a 1-liner description for the github PR that fixes this issue? The issue title is {issue.title} and the body is {issue.body}. The fix modified these files: {changed_files}.\nTitle:'
         title = complete(prompt)
         return title
 
     def create_body(self, changes, issue):
         # TODO: diff the changes and use that to create a better description
-        changed_files = [f for f in changes.keys()]
-        prompt = f'What is a description of the github PR that fixes this issue? The issue title is {issue["title"]} and the issue body is {issue["body"]}. The fix modified these files: {changed_files}.\nDescription:'
+        changed_files = [x['file_name'] for x in changes]
+        prompt = f'What is a description of the github PR that fixes this issue? The issue title is {issue.title} and the issue body is {issue.body}. The fix modified these files: {changed_files}.\nDescription:'
         prompt += 'Respond in markdown format and break down the fix into steps.'
         description = complete(prompt)
-        return f'Fixes {issue["url"]}.\n\n{description}'
+        return f'Fixes {issue.url}.\n\n{description}'
 
 class PRBot:
 
@@ -86,5 +86,5 @@ if __name__ == "__main__":
     issues_all = repo.get_issue_list()
     issue = [issue for issue in issues_all if issue.num == 50][0]
     changes = repo.get_issue_patches(issue, num_hits=num_hits)
-    # pr = SubmittedPR(issue, changes)
+    pr = SubmittedPR(issue, changes)
     # bot.create_pr(org, name, pr)

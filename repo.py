@@ -229,7 +229,7 @@ class Repo:
         issue_embedding = issue.embed
         extensions = issue.allowedExtensions
         pairs = []
-        
+
         for i, embedding in enumerate(self.embeds):
             similarity = compare_embeddings(embedding, issue_embedding)
             pairs.append((self.paths[i], similarity))
@@ -237,7 +237,7 @@ class Repo:
             # # check if any of the blacklisted directories are in the path
             # # if any([blacklisted_dir in self.paths[i] for blacklisted_dir in Repo.directory_blacklist]): continue
             # if extension in extensions:
-                
+
 
         pairs.sort(key=lambda x: x[1], reverse=True)
         D, I = self.index.search(np.array([issue_embedding]), num_hits)
@@ -282,24 +282,50 @@ class Repo:
 
         nearest_files = self.get_nearest_files(issue, num_hits=num_hits)
 
-        patches = {}
+        patches = []
         for file in nearest_files:
+            print(file)
             prompt = f'Below is an issue on for the {self.remote_path} codebase.\n Issue:{issue.title} - {issue.body}\n\n Here is a potential file that may need to be updated to fix the issue:\n'
 
-            prompt += 'Changed file: ' + file + '```'
+            prompt += file + '```\n'
             with open(file, 'r') as f:
-                prompt += f.read()
+                file_content = f.read()
+                prompt += file_content
             prompt += '```\n'
 
-            prompt += 'Does this file need to be changed to resolve the issue? Respond with only `Yes` or `No`.'
+            action_prompt1 = 'Does this file need to be changed to resolve the issue? Respond with only `Yes` or `No`.'
+            needs_patch = complete(prompt + action_prompt1)
+            needs_patch = 'Yes'
 
-            needs_patch = complete(prompt)
             if needs_patch == 'No':
                 continue
             else:
-                prompt += 'Please provide a git patch for the file.\n```'
-                patch = complete(prompt)
-                patches[file] = patch
+                # prompt += 'Please provide a git patch for the file.\n```'
+                # patch = complete(prompt)
+                # patches[file] = patch
+                # action_prompt2 = 'Do the following: 1. output the code block that needs to be changed and 2. output the change.'
+                action_prompt2 = "Identify which code block needs to be changed (mark it up with \"Before:\") and output the change (mark it up with \"After:\"). Make your change match the coding style of the original file."
+                change = complete(prompt + action_prompt2)
+                if "Before:" not in change or "After:" not in change:
+                    print("Warning: incorrect output format")
+                    continue
+                before_and_after = change.split("Before:", 1)[1]
+                before, after = before_and_after.split("After:", 1)
+                before = clean_code_block(before)
+                after = clean_code_block(after)
+                if before in file_content:
+                    new_file_content = file_content.replace(before, after)
+                    # Create a patch
+                    patch = {
+                        "file_name": file,
+                        "content": file_content,
+                        "new_content": new_file_content
+                    }
+                    patches.append(patch)
+                else:
+                    print("Warning: cannot locate `Before` block")
+
+        print(f"Sending {len(patches)} files in the patch")
 
         return patches
 
@@ -360,15 +386,15 @@ class Issue:
             body = comment.body
             conversation += 'From {name}\n: {body}\n'.format(name=name, body=body)
         return conversation
-    
+
     def enhanceIssue(self):
         prompt = f"""We're trying to figure out the most relevant files to a Github issue in a codebase
 
 Given the following queries, explain what is being looked for and include as many related keywords/synonyms as possible.
 
-Issue: 
+Issue:
 \"\"\"
-In Bootstrap 5.3 alpha 1 input-group component partialy react to inline data-bs-theme="dark" attribute 
+In Bootstrap 5.3 alpha 1 input-group component partialy react to inline data-bs-theme="dark" attribute
  ### Prerequisites
 
 - [X] I have [searched](https://github.com/twbs/bootstrap/issues?utf8=%E2%9C%93&q=is%3Aissue) for duplicate or closed issues
@@ -379,7 +405,7 @@ In Bootstrap 5.3 alpha 1 input-group component partialy react to inline data-bs-
 
 So I set for html tag data-bs-theme="light" attribute and set data-bs-theme="dark" attribute inline for form-group component.
 
-When I switch theme in html tag - color scheme of whole document are changing, but form-control background color also change from white to dark, is it must be fixed in dark color?. I repeat this bug at Bootstrap documentation page by inserting 
+When I switch theme in html tag - color scheme of whole document are changing, but form-control background color also change from white to dark, is it must be fixed in dark color?. I repeat this bug at Bootstrap documentation page by inserting
 form-group html code in some examples.
 
 ### Reduced test cases
@@ -387,7 +413,7 @@ form-group html code in some examples.
 ```
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="light">
-<head>  
+<head>
 </head>
 <body>
     <div class="input-group input-group-lg" data-bs-theme="dark">
@@ -446,4 +472,3 @@ if __name__ == '__main__':
             nearest_files = repo.get_nearest_files(issue, num_hits=num_hits)
             print('NM', nearest_files)
 
-   
